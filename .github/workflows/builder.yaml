@@ -44,6 +44,9 @@ jobs:
           # run json generator script
           npm run gen
 
+          # bloat
+          rm -rf node_modules
+
       - name: Setup Pages
         uses: actions/configure-pages@v3
 

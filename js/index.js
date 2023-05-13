@@ -120,7 +120,7 @@ function selectText(value) {
 FONT_STYLE_SELECT.disabled = true;
 TEXT_SELECT.disabled = true;
 
-fetch('../data.json')
+fetch('data.json')
     .then((response) => response.json())
     .then((json) => {
         fontFamilies = json['fonts'];
