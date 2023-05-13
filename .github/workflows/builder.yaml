@@ -20,26 +20,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Download the font and generate the info
+        run: |
+          mkdir -p fonts
 
-      - name: Build and package the fonts
-        run: ./build.sh --package --all
+          # test with DEV as the old versions are named differently
+          wget "https://github.com/sandorex/compacity-fonts/releases/download/DEV/CompacityFonts.zip"
+          mv *.zip fonts/
+          unzip fonts/*.zip
+          rm fonts/*zip
 
-      - name: Release Dev Build
-        uses: softprops/action-gh-release@v1
+          # install the deps
+          npm install
+
+          # run json generator script
+          npm run gen
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          name: Dev Build
-          tag_name: DEV
-          fail_on_unmatched_files: true
-          prerelease: true
-          body: "Latest dev build"
-          files: | # NOTE: files have to be overriden otherwise they will stay outdated so no version in name
-            CompacityFonts.zip
-
-      - name: Release Tagged Build
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          fail_on_unmatched_files: true
-          files: |
-            *.zip
-
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # publish_dir: ./public
+          publish_branch: build
