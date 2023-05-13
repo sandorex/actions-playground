@@ -18,7 +18,7 @@ function loadTexts() {
     texts.forEach(t => {
         // replace hyphens with spaces and prepend the path and extension
         // so the logic below need not be changed if format changes
-        TEXT_SELECT.add(new Option(t.replaceAll('-', ' '), "../texts/" + t + ".html"))
+        TEXT_SELECT.add(new Option(t.replaceAll('-', ' '), "texts/" + t + ".html"))
     });
 }
 
@@ -27,7 +27,7 @@ function loadFontTexts(fontFamily) {
         return;
 
     Object.entries(fontTexts).filter(f => fontFamily.toString().startsWith(f[0])).forEach(f => {
-        TEXT_SELECT.add(new Option(f[1].toString().replace('-', ' '), "../fontTexts/" + fontFamily + '/' + f[1] + ".html"))
+        TEXT_SELECT.add(new Option(f[1].toString().replace('-', ' '), "fontTexts/" + fontFamily + '/' + f[1] + ".html"))
     });
 }
 
