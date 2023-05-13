@@ -1,0 +1,60 @@
+/* disable underline for all links */
+a:link { text-decoration: none; }
+a:visited { text-decoration: none; }
+a:hover { text-decoration: none; }
+a:active { text-decoration: none; }
+
+/* highlight placeholder options in selections */
+/* i don't know if there is a way to do it without per-theme but eh */
+[data-bs-theme="dark"] select:invalid {
+    color: #686e73;
+}
+[data-bs-theme="light"] select:invalid {
+    color: #8f9fb0;
+}
+
+#content {
+    font-size: 24px;
+    line-height: 1.2em;
+    margin-top: 85px;
+    padding-left: 30px;
+    padding-right: 30px;
+}
+
+#content > * {
+    /* make sure that content style is inherited by the children so minimal js required */
+    font-family: inherit;
+    line-height: inherit;
+    font-size: inherit;
+    font-style: inherit;
+    overflow-y: hidden;
+    white-space: pre-wrap;
+    overflow-x: hidden;
+}
+
+.hover-block {
+    font-family: 'CompacityBlock';
+}
+
+.hover-block:hover {
+    font-family: inherit;
+}
+
+/* make it printable, but serves for immersion mode too on fullscreen */
+@media print, all and (display-mode: fullscreen){
+    #content {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    body > .navbar,
+    body > footer {
+        display: none;
+    }
+
+    body {
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+}
+
