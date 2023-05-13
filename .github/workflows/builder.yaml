@@ -32,6 +32,9 @@ jobs:
           rm *zip
           popd
 
+          # forcefully add fonts as they are in gitignore
+          git add -f fonts
+
           # install the deps
           npm install
 
