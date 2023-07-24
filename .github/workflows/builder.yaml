@@ -24,7 +24,7 @@ jobs:
 
       - name: Build podman container
         run: |
-          podman build -f Containerfile -t live-build
+          sudo podman build -f Containerfile -t live-build
 
       - name: Build ISO
         run: |
