@@ -29,7 +29,7 @@ jobs:
       - name: Build ISO
         run: |
           ./configure.sh
-          sudo podman run --rm -it --privileged -v "$(pwd)":/build:exec,dev -w /build localhost/live-build lb build
+          sudo podman run --rm -it --privileged -v "$(pwd)":/build:exec,dev -w /build localhost/live-build sh -c './configure.sh && lb build'
 
       - name: Release
         uses: softprops/action-gh-release@v1
