@@ -10,52 +10,31 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Download the font and generate the info
+      - name: Install podman
         run: |
-          mkdir -p fonts
+          sudo apt update
+          sudo apt-get -y install podman
 
-          # test with DEV as the old versions are named differently
-          wget "https://github.com/sandorex/compacity-fonts/releases/download/DEV/CompacityFonts.zip"
-          mv *.zip fonts/
+      - name: Build podman container
+        run: |
+          podman build -f Containerfile -t live-build
 
-          # unzip is going to unzip in current dir
-          pushd fonts
-          unzip *.zip
-          rm *zip
-          popd
+      - name: Build ISO
+        run: |
+          ./configure.sh
+          sudo podman run --rm -it --privileged -v "$(pwd)":/build:exec,dev -w /build localhost/live-build bash
 
-          # install the deps
-          npm install
-
-          # run json generator script
-          npm run gen
-
-          # bloat
-          rm -rf node_modules
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v3
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+      - name: Release
+        uses: softprops/action-gh-release@v1
         with:
-          # Upload entire repository
-          path: '.'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v2
+          name: Meh
+          fail_on_unmatched_files: yes
+          files: |
+            *.hybrid.iso
