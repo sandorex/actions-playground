@@ -14,22 +14,25 @@ jobs:
   deploy:
     runs-on: ubuntu-22.04
 
+    container:
+      image: debian:latest
+      volumes:
+        - /proc:/proc
+      options: --privileged
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install podman
+      - name: Install live-build
         run: |
-          sudo apt update
-          sudo apt-get -y install podman
-
-      - name: Build podman container
-        run: |
-          sudo podman build -f Containerfile -t live-build
+          apt update
+          apt-get -y install live-build
 
       - name: Build ISO
         run: |
-          sudo podman run --rm -it --privileged -v /proc:/proc -v "$(pwd)":/build -w /build localhost/live-build sh -c './configure.sh && lb build'
+          ./configure.sh
+          lb build
 
       - name: Release
         uses: softprops/action-gh-release@v1
