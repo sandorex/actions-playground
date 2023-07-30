@@ -17,7 +17,7 @@ args=(
     --system live
 
     # does not include `apt update` cache in the image, saves a lot of disk space
-    --apt-indices
+    --apt-indices false
 
     # for manual use only, opens interactive shell in chroot and cannot be automated
     #--interactive shell
