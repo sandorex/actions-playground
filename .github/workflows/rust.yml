@@ -1,9 +1,6 @@
 name: Rust Test
 
-on:
-  push:
-    tags:
-      - '*'
+on: push
 
 env:
   CARGO_TERM_COLOR: always
