@@ -1,6 +1,9 @@
 name: Release
 
-on: [push]
+on:
+  push:
+    tags:
+      - 'v*'
 
 env:
   CARGO_TERM_COLOR: always
