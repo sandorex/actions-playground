@@ -1,76 +1,132 @@
-use crate::util::{self, get_container_ws, CommandOutputExt, Engine};
 use crate::cli;
-use std::process::{Command, ExitCode};
+use crate::command_extensions::*;
+use crate::prelude::*;
 
-/// Extracts default shell for user from /etc/passwd inside a container
-fn get_user_shell(engine: &Engine, container: &str, user: &str) -> String {
-    let cmd_result = Command::new(&engine.path)
-        .args(["exec", "--user", "root", "-it", container, "getent", "passwd", user])
-        .output()
-        .expect("Could not execute engine");
+pub fn open_shell(ctx: Context, mut cli_args: cli::CmdShellArgs) -> Result<()> {
+    // try to find container in current directory
+    if cli_args.name.is_empty() {
+        let containers = ctx.get_cwd_containers()?;
+        if containers.is_empty() {
+            return Err(anyhow!(
+                "Could not find a running container in current directory"
+            ));
+        }
 
-    const ERR: &str = "Failed to extract default shell from /etc/passwd";
-    let stdout = String::from_utf8_lossy(&cmd_result.stdout);
-    if ! cmd_result.status.success() || stdout.is_empty() {
-        panic!("{}", ERR);
+        cli_args.name = containers.first().unwrap().clone();
+    } else if !ctx.dry_run && !ctx.engine.container_exists(&cli_args.name)? {
+        return Err(anyhow!("Container {:?} does not exist", &cli_args.name));
     }
 
-    // i do not want to rely on external tools like awk so im extracting manually
-    stdout.trim()
-        .split(':')
-        .last()
-        .map(|x| x.to_string())
-        .expect(ERR)
-}
+    let container_info = ctx.engine.inspect_containers(vec![&cli_args.name])?;
+    let container_info = container_info.first().unwrap();
 
-fn gen_open_shell_cmd(engine: &Engine, shell: &Option<String>, ws_dir: String, container_name: &str) -> Vec<String>{
-    let user = util::get_user();
-    let user_shell = match shell {
-        Some(x) => x,
-        None => &get_user_shell(engine, container_name, user.as_str()),
+    let Some(ws_dir) = container_info
+        .labels
+        .get(crate::CONTAINER_LABEL_CONTAINER_DIR)
+    else {
+        return Err(anyhow!(
+            "Container {:?} is not owned by {}",
+            cli_args.name,
+            crate::APP_NAME
+        ));
     };
 
-    vec![
-        "exec".into(), "-it".into(),
-        format!("--env=TERM={}", std::env::var("TERM").unwrap_or("xterm".into())),
-        format!("--env=HOME=/home/{}", user),
+    let mut cmd = ctx.engine.command();
+
+    let Some(user_shell) = container_info.labels.get(crate::CONTAINER_LABEL_USER_SHELL) else {
+        return Err(anyhow!(
+            "Container {:?} does not have label {:?}",
+            cli_args.name,
+            crate::CONTAINER_LABEL_USER_SHELL
+        ));
+    };
+
+    // TODO share the env with exec command so its consistent
+    cmd.args([
+        "exec".into(),
+        "-it".into(),
+        format!(
+            "--env=TERM={}",
+            std::env::var("TERM").unwrap_or("xterm".into())
+        ),
+        format!("--env=HOME=/home/{}", ctx.user),
         format!("--env=SHELL={}", user_shell),
-        "--workdir".into(), ws_dir,
-        "--user".into(), user,
-        container_name.to_string(),
-        user_shell.to_string(), "-l".into(),
-    ]
-}
+        "--workdir".into(),
+        ws_dir.to_string(),
+        "--user".into(),
+        ctx.user.clone(),
+        cli_args.name.clone(),
+        // NOTE: workaround to always source ~/.profile, even if shell is a script or non posix
+        // like fish shell or nushell
+        "sh".into(),
+        "-l".into(),
+        "-c".into(),
+        format!("exec {}", user_shell),
+    ]);
 
-pub fn open_shell(engine: Engine, dry_run: bool, cli_args: &cli::CmdShellArgs) -> ExitCode {
-    // check if container is owned
-    if !dry_run && !util::is_box_container(&engine, &cli_args.name) {
-        eprintln!("Container {} is not owned by box or does not exist", &cli_args.name);
-        return ExitCode::FAILURE;
-    }
-
-    let ws_dir = match get_container_ws(&engine, &cli_args.name) {
-        Some(x) => x,
-        None if dry_run => "/ws/dry_run".to_string(), // NOTE just so it does not fail in dry_run
-        None => {
-            eprintln!("Could not get container workspace from container {:#?}", &cli_args.name);
-
-            return ExitCode::FAILURE;
-        },
-    };
-
-    let args = gen_open_shell_cmd(&engine, &cli_args.shell, ws_dir, &cli_args.name);
-
-    if dry_run {
-        util::print_cmd_dry_run(&engine, args);
-
-        ExitCode::SUCCESS
+    if ctx.dry_run {
+        cmd.log(log::Level::Error);
     } else {
-        Command::new(&engine.path)
-            .args(args)
-            .status()
-            .expect("Could not execute engine")
-            .to_exitcode()
+        cmd.log_status_anyhow(log::Level::Debug)?;
     }
+
+    Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::{engine::Podman, tests_prelude::*};
+    use assert_cmd::prelude::*;
+    use rexpect::session::{spawn_command, PtyReplSession};
+    use std::process::Command;
+
+    #[test]
+    #[ignore]
+    fn cmd_shell_podman() -> Result<()> {
+        let tempdir = tempfile::tempdir()?;
+
+        let cmd = Command::cargo_bin(env!("CARGO_BIN_NAME"))?
+            .args(["start", "debian:trixie"])
+            .current_dir(tempdir.path())
+            .assert()
+            .success();
+
+        let container = Container {
+            engine: Box::new(Podman),
+            container: String::from_utf8_lossy(&cmd.get_output().stdout)
+                .trim()
+                .to_string(),
+        };
+
+        let mut c = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
+        c.args(["shell", &container]);
+        c.current_dir(tempdir.path());
+
+        let mut pty = spawn_command(c, Some(5_000)).and_then(|p| {
+            let mut session = PtyReplSession {
+                prompt: "$".to_owned(),
+                pty_session: p,
+                quit_command: Some("exit".to_owned()),
+                echo_on: true,
+            };
+
+            // wait until the prompt appears
+            session.wait_for_prompt()?;
+
+            // set prompt to something simple
+            session.send_line("export PS1='$ '")?;
+
+            // wait for prompt again
+            session.wait_for_prompt()?;
+
+            Ok(session)
+        })?;
+
+        // check if its running properly
+        pty.send_line("echo $ARCAM_VERSION")?;
+        pty.exp_string(env!("CARGO_PKG_VERSION"))?;
+        pty.wait_for_prompt()?;
+
+        Ok(())
+    }
+}

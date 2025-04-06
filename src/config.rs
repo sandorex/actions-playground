@@ -1,167 +1,121 @@
-/// Contains everything related to container configuration
+//! Contains everything related to container configuration
 
+use anyhow::{Context, Result};
+use code_docs::{code_docs_struct, DocumentedStruct};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
-
-#[derive(Debug)]
-pub enum ConfigError {
-    Message(String),
-    Generic(Box<dyn Error>),
-    File(String, Box<dyn Error>),
-}
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Message(msg) => write!(f, "{}", msg),
-            Self::Generic(x) => x.fmt(f),
-            Self::File(file, err) => {
-                write!(f, "Config error in file {}: ", file)?;
-                err.fmt(f)?;
-
-                Ok(())
-            },
-        }
-    }
-}
-
-impl Error for ConfigError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Message(_) => None,
-            Self::Generic(x) => Some(x.as_ref()),
-            Self::File(_, x) => Some(x.as_ref()),
-        }
-    }
-}
+use std::path::Path;
 
 /// Whole config file
 #[derive(Debug, Clone, PartialEq, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConfigFile {
     /// Version of the configuration
-    pub version: Option<u64>,
+    pub version: u64,
 
-    /// All container configs
-    pub config: Option<Vec<Config>>,
+    #[serde(flatten)]
+    pub config: Config,
 }
 
 impl ConfigFile {
-    /// Loads config from str, path is just for error message and can be anything
-    pub fn load_from_str(text: &str) -> Result<Self, ConfigError> {
-        let obj = toml::from_str::<ConfigFile>(text)
-            .map_err(|err| ConfigError::Generic(Box::new(err)) )?;
-
-        let version = obj.version.unwrap_or(1);
-        if version != 1 {
-            return Err(
-                ConfigError::Message(format!("Invalid schema version {}", version)),
-            )
-        }
-
-        Ok(obj)
+    // TODO handle different future versions of config
+    pub fn config_from_str(input: &str) -> Result<Config> {
+        Ok(toml::from_str::<ConfigFile>(input)?.config)
     }
 
-    pub fn load_from_file(path: &str) -> Result<Self, ConfigError> {
-        let file_contents = std::fs::read_to_string(path)
-            .map_err(|err| ConfigError::File(path.to_string(), Box::new(err)))?;
+    pub fn config_from_file(file: &Path) -> Result<Config> {
+        let file_contents = std::fs::read_to_string(file)
+            .with_context(|| format!("while reading config file {:?}", file))?;
 
-        Self::load_from_str(&file_contents)
-            .map_err(|err| ConfigError::File(path.to_string(), Box::new(err)))
+        Self::config_from_str(&file_contents)
+            .with_context(|| format!("while parsing config file {:?}", file))
     }
 }
 
-/// Single configuration for a container, contains default settings and optional settings per
-/// engine that get applied over the default settings
-#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
-pub struct Config {
-    // TODO figure out rules for local containers that need to be built
-    /// Name of the configuration
-    pub name: String,
+// save all the fields and docs so they can be printed as always up-to-date documentation
+code_docs_struct! {
+    /// Single configuration for a container, contains default settings and optional settings per
+    /// engine that get applied over the default settings
+    #[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct Config {
+        /// Image used for the container
+        pub image: String,
 
-    /// Image used for the container
-    pub image: String,
+        /// Optional path to directory to use as /etc/skel (static dotfiles)
+        ///
+        /// Environ vars are expanded
+        pub skel: Option<String>,
 
-    /// Optional name to set for the container, otherwise randomly generated
-    pub container_name: Option<String>,
+        /// Default user shell
+        #[serde(default)]
+        pub shell: Option<String>,
 
-    /// Dotfiles directory to use as /etc/skel
-    pub dotfiles: Option<String>,
+        /// Set network access
+        #[serde(default)]
+        pub network: bool,
 
-    /// Should the container have access to internet
-    #[serde(default)]
-    pub network: bool,
+        /// Passthrough pulseaudio, security impact is unknown
+        #[serde(default)]
+        pub audio: bool,
 
-    /// Default setting used regardless of the engine
-    #[serde(default)]
-    pub default: EngineConfig,
+        /// Passthrough wayland compositor socket, high security impact, allows clipboard access
+        #[serde(default)]
+        pub wayland: bool,
 
-    /// Override default settings if the engine is podman
-    #[serde(default)]
-    pub podman: EngineConfig,
+        /// Passthrough ssh-agent socket, security impact is unknown
+        #[serde(default)]
+        pub ssh_agent: bool,
 
-    /// Override default settings if the engine is docker
-    #[serde(default)]
-    pub docker: EngineConfig,
-}
+        /// Passthrough D-BUS session bus, maximum security impact allows arbitrary code execution
+        #[serde(default)]
+        pub session_bus: bool,
 
-impl Config {
-    pub fn get_engine_config(&self, engine: &crate::util::Engine) -> &EngineConfig {
-        match &engine.kind {
-            crate::util::EngineKind::Podman => &self.podman,
-            crate::util::EngineKind::Docker => &self.docker,
-        }
+        /// Path to mount as a volume, basically shorthand for `--volume=<name>:<path>`
+        #[serde(default)]
+        pub persist: Vec<(String, String)>,
+
+        /// Same as `persist` but the path is chowned as user on init
+        #[serde(default)]
+        pub persist_user: Vec<(String, String)>,
+
+        /// Run command before all other scripts (ran using `/bin/sh`)
+        #[serde(default)]
+        pub on_init_pre: Option<String>,
+
+        /// Run command after all other scripts (ran using `/bin/sh`)
+        #[serde(default)]
+        pub on_init_post: Option<String>,
+
+        /// Script to run on start, all original arguments are passed verbatim, you have to run
+        /// `arcam start` yourself or nothing will happen
+        ///
+        /// NOTE: the script is ran using "/bin/sh"
+        pub host_pre_init: Option<String>,
+
+        /// Pass through container port to host (both TCP and UDP)
+        ///
+        /// Not all ports are allowed with rootless podman
+        #[serde(default)]
+        pub ports: Vec<(u32, u32)>,
+
+        /// Environment variables to set (name, value)
+        ///
+        /// Environ vars are expanded
+        #[serde(default)]
+        pub env: Vec<(String, String)>,
+
+        /// Add capabilities, or drop them with by prefixing `!cap`
+        ///
+        /// For more details about capabilities read `man 7 capabilities`
+        #[serde(default)]
+        pub capabilities: Vec<String>,
+
+        /// Args passed to the engine
+        ///
+        /// Environ vars are expanded
+        #[serde(default)]
+        pub engine_args: Vec<String>,
     }
-}
-
-// TODO create conversion between cli args and this, so one could generate it from cmd args
-/// Container arguments for specific engine
-#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
-pub struct EngineConfig {
-    // NOTE keep it simple, do not add unecessary wrappers for arguments
-
-    /// Arguments to pass to the engine, some $VARS are expanded
-    #[serde(default)]
-    pub engine_args: Vec<String>,
-
-    /// Capabilties to add / remove for the container
-    ///
-    /// For example `!cap_net_broadcast` disables the capability
-    #[serde(default)]
-    pub capabilities: Vec<String>,
-
-    /// Environment variables to set
-    #[serde(default)]
-    pub env: HashMap<String, String>
-}
-
-/// Load and merge configs from directory (loads *.toml file)
-pub fn load_from_dir(path: &str) -> Result<HashMap<String, Config>, ConfigError> {
-    let mut configs: HashMap<String, Config> = HashMap::new();
-
-    let toml_files: Vec<std::path::PathBuf> = std::path::Path::new(path)
-        .read_dir()
-        .map_err(|err| ConfigError::Message(format!("Error reading config directory {}: {}", path, err)))?
-        .map(|x| x.unwrap().path() )
-        .filter(|x| x.extension().unwrap_or_default() == "toml")
-        .collect();
-
-    for file in toml_files {
-        let config_file = ConfigFile::load_from_file(file.display().to_string().as_str())?;
-
-        for config in config_file.config.unwrap_or_default() {
-            // ignore any duplicates, let the user handle it if they wish
-            if configs.contains_key(&config.name) {
-                eprintln!("Ignoring duplicate config {} in {}", &config.name, file.display());
-                continue;
-            }
-
-            configs.insert(config.name.clone(), config);
-        }
-    }
-
-    Ok(configs)
 }
 
 #[cfg(test)]
@@ -171,50 +125,23 @@ mod tests {
     #[test]
     fn from_str() {
         let cfg_text = r#"
-[[config]]
-name = "first"
+version = 1
 image = "fedora"
-
-[config.default]
 engine_args = [ "default" ]
-
-[config.podman]
-engine_args = [ "podman" ]
-
-[config.docker]
-engine_args = [ "docker" ]
 "#;
 
-        let result = ConfigFile::load_from_str(cfg_text);
+        let result = ConfigFile::config_from_str(cfg_text);
         assert!(result.is_ok(), "result is err: {}", result.unwrap_err());
         let result_ok = result.unwrap();
 
-        assert_eq!(result_ok, ConfigFile {
-            version: None,
-            config: Some(vec![
-                Config {
-                    name: "first".into(),
-                    image: "fedora".into(),
+        assert_eq!(
+            result_ok,
+            Config {
+                image: "fedora".into(),
+                engine_args: vec!["default".into()],
 
-                    default: EngineConfig {
-                        engine_args: vec!["default".into()],
-                        ..Default::default()
-                    },
-
-                    podman: EngineConfig {
-                        engine_args: vec!["podman".into()],
-                        ..Default::default()
-                    },
-
-                    docker: EngineConfig {
-                        engine_args: vec!["docker".into()],
-                        ..Default::default()
-                    },
-
-                    ..Default::default()
-                },
-            ]),
-        });
+                ..Default::default()
+            }
+        );
     }
 }
-

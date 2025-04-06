@@ -1,45 +1,67 @@
-## box
+## arcam
+![Crates.io Version](https://img.shields.io/crates/v/arcam)
+![GitHub Release](https://img.shields.io/github/v/release/sandorex/arcam)
 
-Fast pet container manager, designed for sandboxed dev environment using podman *(docker is currently not supported but will be in the future)*
+Fast sandboxed development container manager using podman, minimal permissions by default choose balance between security and convenience
 
-Currently experimental but i am using them personally
+![Demo GIF](demo.gif)
+
+**NOTE: Version 0.1.X is considered alpha, breaking changes may happen at any point**
+
+Arcam started as a bash script and has evolved a lot since then, all code since `v0.1.1` was written inside arcam container
+
+*Originally named `box`*
+
+### Features
+- Sandboxed ephemeral container by default (podman defaults)
+- Pass through audio, wayland, ssh-agent easily on demand with flags or config
+- TOML configuration files for containers, customize your experience per project requirements
+- Override dotfiles locally, so you don't have to rebuild the image to update dotfiles
+- Automatic passwordless sudo *(or `su` if not installed)*
+- Consistant development environment on any distro, especially useful on distros like fedora atomic
+- Offline use, container initialization process does not require internet connection *(image has to be downloaded of course)*
 
 ### Installation
-Currently the easiest way to install it is using cargo, do not worry the binary builds quickly
+You can download binary for latest release [here](https://github.com/sandorex/arcam/releases/latest/download/arcam)
+
+Alternatively you can install it from crates.io
 ```sh
-cargo install --git https://github.com/sandorex/box
+cargo install arcam
 ```
 
-If you dont have cargo installed you can use a container to build it too
-```sh
-git clone https://github.com/sandorex/box
-cd box
-podman run --rm --user "$(id -u)":"$(id -g)" -v "$PWD":/usr/src/ws -w /usr/src/ws rust:latest cargo build --release
+You can also install straight from git
+```
+cargo install --git https://github.com/sandorex/arcam
 ```
 
-Github actions releases will come soon too
+### Usage
+To avoid out-of-date documentation use the help text from binary itself\
+For help with config options run `arcam config --options`, or to see an example `arcam config --example`
 
-### Why Rust?
-I wanted a single binary that could be distributed easily, even kept inside the container for easier installation
+### Custom Container Image
+Making a custom container image is same as for any other container, to take full advantage of arcam keep following things in mind:
+- Install `sudo` for nicer experience
+- Any executable files in `/init.d` will be executed on start of the container as the user, you can use `sudo` or `su` for root access
+- Put dotfiles in `/etc/skel` which will be copied to user home on start, note that it may be overriden at runtime using `--skel`
+- All data inside the container (not counting volumes) will be deleted when container stops, to add caching or presistant data use a named volume
 
-Current binary as of time of writing (30-07-2024) is around 1 megabyte, so im pretty happy with it
-
-Original prototype was written in bash and while it was fine i did not feel like maintaining a growing complicated bash script split into multiple files
+For examples you can take a look at [my container](https://github.com/sandorex/config/tree/master/boxes) with neovim and all LSPs preinstalled
 
 ### Comparison to Other Tools
 #### Toolbox / Distrobox
-Both are quite good at what they do, providing integrated experience with the host, but the goal of this project is to provide a opposite experience a sandbox! While you can poke holes in it if you want, the default experience is pretty barebones
+Both are great at their job, to provide a seamless integration with the host but not sandboxing
 
-And no, you cannot make toolbox or distrobox sandboxed (at least at the moment of writing), i personally have nothing against either of them and use them myself but i always wanted a simple-ish system for specialized images to be used in sandboxed environment
+Arcam provides sandboxed experience by default, and it's your job to choose where/when to sacrifice security for convenience, it's highly configurable
 
-### The Goal
-Hackable "framework" to create your comfy containerized workflow, be it fully airtight container with no network, or container with RW access of your Home directory and SSH keys, **you choose the balance between security and comfort**
+### Development Notes
+#### Demo GIF
+Use asciinema in 80x30 terminal
 
-#### How Will It Work?
-Well it kinda works already, but i plan to write documentation how to do specific things, customizations and such so you can build your own perfect environment
-
-As writing all the tooling to change containers at runtime is plain stupid, i will focus on building customized container images
-
-### Examples
-- My own containers can be found in my [Dotfiles](https://github.com/sandorex/config) under [boxes](https://github.com/sandorex/config/tree/master/boxes)
-
+The GIF was generated with following command
+```
+agg --theme monokai \
+    --font-family 'FiraCode Nerd Font' \
+    --font-size 16 \
+    --last-frame-duration 5 \
+    demo.cast demo.gif
+```

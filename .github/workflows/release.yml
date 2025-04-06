@@ -1,9 +1,6 @@
 name: Release
 
-on:
-  push:
-    tags:
-      - 'v*'
+on: [push]
 
 env:
   CARGO_TERM_COLOR: always
@@ -11,6 +8,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: rust:bullseye # specifically for glibc 2.31
 
     steps:
     - uses: actions/checkout@v4
@@ -20,4 +19,4 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          target/release/box
+          target/release/arcam
