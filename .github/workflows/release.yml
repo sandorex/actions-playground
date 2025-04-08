@@ -24,12 +24,13 @@ jobs:
       run: |
         cargo build --verbose --release
         cargo build --verbose --release --target x86_64-unknown-linux-musl
-        find . -name 'arcam'
-        mv target/target/x86_64-unknown-linux-musl/release/arcam target/target/x86_64-unknown-linux-musl/release/arcam-musl
+
+        # rename target so they can coexist
+        mv target/x86_64-unknown-linux-musl/release/arcam target/x86_64-unknown-linux-musl/release/arcam-musl
 
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           target/release/arcam
-          target/target/x86_64-unknown-linux-musl/release/arcam-musl
+          target/x86_64-unknown-linux-musl/release/arcam-musl
