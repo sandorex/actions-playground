@@ -20,15 +20,14 @@ jobs:
     - name: Rustup Get Toolchain
       run: rustup target add x86_64-unknown-linux-musl
 
+      # git assumes the repository is unsafe as its made by different user
     - name: Build Release
       run: |
-        # fix issues with vergen-git2
-        git config --global --add safe.directory *
+        git config --global --add safe.directory '*'
 
         cargo build --verbose --release
         cargo build --verbose --release --target x86_64-unknown-linux-musl
 
-        # rename target so they can coexist
         mv target/x86_64-unknown-linux-musl/release/arcam target/x86_64-unknown-linux-musl/release/arcam-musl
 
     - name: Release
