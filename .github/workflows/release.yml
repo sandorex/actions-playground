@@ -16,11 +16,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # needed for proper information gather by vergen2
 
     - name: Rustup Get Toolchain
       run: rustup target add x86_64-unknown-linux-musl
 
-      # git assumes the repository is unsafe as its made by different user
     - name: Build Release
       run: |
         git config --global --add safe.directory '*'
