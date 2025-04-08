@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: rust:bullseye # specifically for glibc 2.31
+      image: rust:bullseye # specifically for glibc 2.31CARGO_TARGET_DIR
 
     steps:
     - uses: actions/checkout@v4
@@ -24,6 +24,7 @@ jobs:
       run: |
         cargo build --verbose --release
         cargo build --verbose --release --target x86_64-unknown-linux-musl
+        find . -name 'arcam'
         mv target/target/x86_64-unknown-linux-musl/release/arcam target/target/x86_64-unknown-linux-musl/release/arcam-musl
 
     - name: Release
