@@ -16,10 +16,19 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Rustup Get Toolchain
+      run: rustup target add x86_64-unknown-linux-musl
+
     - name: Build Release
-      run: cargo build --verbose --release
+      run: |
+        cargo build --verbose --release
+        cargo build --verbose --release --target x86_64-unknown-linux-musl
+        mv target/target/x86_64-unknown-linux-musl/release/arcam target/target/x86_64-unknown-linux-musl/release/arcam-musl
+
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           target/release/arcam
+          target/target/x86_64-unknown-linux-musl/release/arcam-musl
