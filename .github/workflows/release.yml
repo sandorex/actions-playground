@@ -16,8 +16,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0 # needed for proper information gather by vergen2
 
     - name: Rustup Get Toolchain
       run: rustup target add x86_64-unknown-linux-musl
